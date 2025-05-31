@@ -4,7 +4,7 @@ Sistem manajemen laboratorium berbasis web untuk Fakultas MIPA yang memungkinkan
 
 ## Demo Aplikasi
 
-Lihat demo aplikasi ini di: [Link Demo]
+Lihat demo aplikasi ini di: https://youtu.be/7tqEpRYq7Pw
 
 Gunakan akun berikut untuk mencoba:
 - Admin: admin@labsys.test / admin_password_123

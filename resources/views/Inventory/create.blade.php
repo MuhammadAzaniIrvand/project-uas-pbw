@@ -9,44 +9,93 @@
         <div class="max-w-2xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
                 <div class="p-6 lg:p-8">
+                    {{-- Tampilkan semua error validasi --}}
+                    <x-validation-errors class="mb-4" />
+
                     <form method="POST" action="{{ route('admin.inventaris.store') }}">
                         @csrf
+                        {{-- NAMA ALAT --}}
                         <div>
-                            <x-label for="name" value="{{ __('Nama Item') }}" />
-                            <x-input id="name" class="block mt-1 w-full" type="text" name="name" :value="old('name')" required autofocus />
-                            <x-input-error for="name" class="mt-2" />
+                            <x-label for="nama_alat" value="{{ __('Nama Alat/Item') }}" />
+                            <x-input id="nama_alat" class="block mt-1 w-full" type="text" name="nama_alat" :value="old('nama_alat')" required autofocus />
+                            <x-input-error for="nama_alat" class="mt-2" />
                         </div>
 
+                        {{-- JUMLAH --}}
                         <div class="mt-4">
-                            <x-label for="quantity" value="{{ __('Jumlah') }}" />
-                            <x-input id="quantity" class="block mt-1 w-full" type="number" name="quantity" :value="old('quantity', 0)" required min="0" />
-                            <x-input-error for="quantity" class="mt-2" />
+                            <x-label for="jumlah" value="{{ __('Jumlah') }}" />
+                            <x-input id="jumlah" class="block mt-1 w-full" type="number" name="jumlah" :value="old('jumlah', 1)" required min="0" /> {{-- min="1" jika tidak boleh 0 saat buat --}}
+                            <x-input-error for="jumlah" class="mt-2" />
                         </div>
 
+                        {{-- KATEGORI (Dropdown dari tabel kategoris) --}}
                         <div class="mt-4">
-                            <x-label for="category" value="{{ __('Kategori (Opsional)') }}" />
-                            <x-input id="category" class="block mt-1 w-full" type="text" name="category" :value="old('category')" />
-                            <x-input-error for="category" class="mt-2" />
+                            <x-label for="kategori_id" value="{{ __('Kategori') }}" />
+                            <select name="kategori_id" id="kategori_id" class="block mt-1 w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm">
+                                <option value="">-- Pilih Kategori (Opsional) --</option>
+                                @if(isset($kategoris) && $kategoris->count() > 0)
+                                    @foreach ($kategoris as $kategori)
+                                        <option value="{{ $kategori->id }}" {{ old('kategori_id') == $kategori->id ? 'selected' : '' }}>
+                                            {{ $kategori->nama_kategori }} {{-- Asumsi kolom nama di tabel kategoris adalah 'nama_kategori' --}}
+                                        </option>
+                                    @endforeach
+                                @else
+                                    <option value="" disabled>Tidak ada data kategori</option>
+                                @endif
+                            </select>
+                            <x-input-error for="kategori_id" class="mt-2" />
                         </div>
 
+                        {{-- KONDISI (Dropdown) --}}
                         <div class="mt-4">
-                            <x-label for="location" value="{{ __('Lokasi (Opsional)') }}" />
-                            <x-input id="location" class="block mt-1 w-full" type="text" name="location" :value="old('location')" />
-                            <x-input-error for="location" class="mt-2" />
+                            <x-label for="kondisi" value="{{ __('Kondisi') }}" />
+                            <select name="kondisi" id="kondisi" required class="block mt-1 w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm">
+                                <option value="">-- Pilih Kondisi --</option>
+                                @if(isset($kondisiOptions))
+                                    @foreach ($kondisiOptions as $opsiKondisi) {{-- Nama variabel $opsiKondisi agar tidak konflik dengan $kondisi dari old() --}}
+                                        <option value="{{ $opsiKondisi }}" {{ old('kondisi') == $opsiKondisi ? 'selected' : '' }}>
+                                            {{ $opsiKondisi }}
+                                        </option>
+                                    @endforeach
+                                @endif
+                            </select>
+                            <x-input-error for="kondisi" class="mt-2" />
                         </div>
 
+                        {{-- LOKASI --}}
                         <div class="mt-4">
-                            <x-label for="description" value="{{ __('Deskripsi (Opsional)') }}" />
-                            <textarea id="description" name="description" rows="3"
-                                      class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm block mt-1 w-full">{{ old('description') }}</textarea>
-                            <x-input-error for="description" class="mt-2" />
+                            <x-label for="lokasi" value="{{ __('Lokasi (Opsional)') }}" />
+                            <x-input id="lokasi" class="block mt-1 w-full" type="text" name="lokasi" :value="old('lokasi')" />
+                            <x-input-error for="lokasi" class="mt-2" />
                         </div>
 
-                        {{-- Jika ada upload gambar:
+                        {{-- DESKRIPSI --}}
                         <div class="mt-4">
-                            <x-label for="image" value="{{ __('Gambar (Opsional)') }}" />
-                            <input id="image" class="block mt-1 w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 dark:text-gray-400 focus:outline-none dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400" type="file" name="image_path">
-                            <x-input-error for="image_path" class="mt-2" />
+                            <x-label for="deskripsi" value="{{ __('Deskripsi (Opsional)') }}" />
+                            <textarea id="deskripsi" name="deskripsi" rows="3"
+                                      class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm block mt-1 w-full">{{ old('deskripsi') }}</textarea>
+                            <x-input-error for="deskripsi" class="mt-2" />
+                        </div>
+
+                        {{-- NOMOR SERI --}}
+                        <div class="mt-4">
+                            <x-label for="nomor_seri" value="{{ __('Nomor Seri (Opsional)') }}" />
+                            <x-input id="nomor_seri" class="block mt-1 w-full" type="text" name="nomor_seri" :value="old('nomor_seri')" />
+                            <x-input-error for="nomor_seri" class="mt-2" />
+                        </div>
+
+                        {{-- TANGGAL PENGADAAN --}}
+                        <div class="mt-4">
+                            <x-label for="tanggal_pengadaan" value="{{ __('Tanggal Pengadaan (Opsional)') }}" />
+                            <x-input id="tanggal_pengadaan" class="block mt-1 w-full" type="date" name="tanggal_pengadaan" :value="old('tanggal_pengadaan')" />
+                            <x-input-error for="tanggal_pengadaan" class="mt-2" />
+                        </div>
+
+                        {{-- Contoh jika ada upload gambar:
+                        <div class="mt-4">
+                            <x-label for="gambar_inventaris" value="{{ __('Gambar (Opsional)') }}" />
+                            <input id="gambar_inventaris" class="block mt-1 w-full ..." type="file" name="gambar_inventaris">
+                            <x-input-error for="gambar_inventaris" class="mt-2" />
                         </div>
                         --}}
 

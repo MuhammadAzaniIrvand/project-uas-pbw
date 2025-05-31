@@ -17,6 +17,8 @@ class Peminjaman extends Model
      *
      * @var array<int, string>
      */
+     protected $table = 'peminjamen';
+
     protected $fillable = [
         'user_id',
         'inventaris_id',

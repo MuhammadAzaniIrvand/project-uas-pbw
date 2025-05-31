@@ -3,43 +3,49 @@
 namespace App\Http\Controllers;
 
 use App\Models\Peminjaman;
-use App\Models\Inventaris; // Pastikan ini nama model inventaris Anda
+use App\Models\Inventaris; // Pastikan ini adalah model inventaris Anda yang benar
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB; // Untuk transaksi database
+use Illuminate\Validation\Rule; // Tidak terpakai di versi ini, tapi bisa berguna jika ada validasi status lebih kompleks
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class BorrowingController extends Controller
 {
     /**
      * Menampilkan riwayat peminjaman untuk mahasiswa yang sedang login.
      */
-    public function studentHistory()
+    public function studentHistory(Request $request)
     {
         $user = Auth::user();
-        $borrowings = Peminjaman::where('user_id', $user->id)
-                                ->with(['inventaris', 'petugas']) // Eager load
-                                ->latest('tanggal_pinjam')      // Urutkan terbaru dulu
-                                ->paginate(10);                 // Paginasi
+        $query = Peminjaman::where('user_id', $user->id)
+                                ->with(['inventaris.kategori', 'petugas'])
+                                ->latest('tanggal_pinjam');
 
-        return view('borrowing.history-student', compact('borrowings', 'user'));
+        if ($request->filled('status') && $request->status !== 'Semua') {
+            $query->where('status', $request->status);
+        }
+
+        $borrowings = $query->paginate(10)->appends($request->query());
+        // Kirim $statuses untuk filter dropdown di view
+        $statuses = ['Semua', 'Menunggu Persetujuan', 'Dipinjam', 'Dikembalikan', 'Terlambat', 'Ditolak'];
+
+        return view('borrowing.history-student', compact('borrowings', 'user', 'statuses'));
     }
 
     /**
      * Menampilkan daftar permintaan peminjaman yang perlu ditindaklanjuti oleh Admin/Aslab.
-     * Status: 'Menunggu Persetujuan'
      */
     public function adminRequests(Request $request)
     {
-        if (!Gate::allows('manage-inventaris')) { // Ganti dengan Gate 'manage-peminjaman' jika ada
+        if (!Gate::allows('manage-inventaris')) { // Pertimbangkan Gate 'manage-peminjaman'
             abort(403, 'Anda tidak memiliki izin untuk mengakses halaman ini.');
         }
 
-        $query = Peminjaman::with(['user', 'inventaris'])
+        $query = Peminjaman::with(['user', 'inventaris.kategori'])
                             ->where('status', 'Menunggu Persetujuan');
 
-        // Anda bisa menambahkan fitur search di sini jika diperlukan
         if ($request->filled('search_requests')) {
             $searchTerm = $request->search_requests;
             $query->where(function($q) use ($searchTerm) {
@@ -58,18 +64,16 @@ class BorrowingController extends Controller
      */
     public function adminHistoryAll(Request $request)
     {
-        if (!Gate::allows('manage-inventaris')) { // Ganti dengan Gate 'manage-peminjaman' jika ada
+        if (!Gate::allows('manage-inventaris')) { // Pertimbangkan Gate 'manage-peminjaman'
             abort(403, 'Anda tidak memiliki izin untuk mengakses halaman ini.');
         }
 
-        $query = Peminjaman::with(['user', 'inventaris', 'petugas']);
+        $query = Peminjaman::with(['user', 'inventaris.kategori', 'petugas']);
 
-        // Filter berdasarkan status
         if ($request->filled('status_peminjaman') && $request->status_peminjaman != 'Semua') {
             $query->where('status', $request->status_peminjaman);
         }
 
-        // Filter berdasarkan pencarian
         if ($request->filled('search_peminjaman')) {
             $searchTerm = $request->search_peminjaman;
             $query->where(function($q) use ($searchTerm) {
@@ -79,7 +83,7 @@ class BorrowingController extends Controller
         }
 
         $borrowings = $query->latest('tanggal_pinjam')->paginate(10)->appends($request->query());
-        $statuses = ['Semua', 'Menunggu Persetujuan', 'Dipinjam', 'Dikembalikan', 'Terlambat', 'Ditolak']; // Untuk dropdown filter
+        $statuses = ['Semua', 'Menunggu Persetujuan', 'Dipinjam', 'Dikembalikan', 'Terlambat', 'Ditolak'];
 
         return view('borrowing.history-all-admin', compact('borrowings', 'statuses'));
     }
@@ -90,30 +94,31 @@ class BorrowingController extends Controller
     public function store(Request $request, Inventaris $inventaris) // Route Model Binding untuk $inventaris
     {
         if (Auth::user()->role !== 'Mahasiswa') {
-            return redirect()->back()->with('error', 'Hanya mahasiswa yang dapat mengajukan peminjaman.');
+            return redirect()->back()->with('error_pinjam', 'Hanya mahasiswa yang dapat mengajukan peminjaman.');
         }
 
         $validatedData = $request->validate([
-            'jumlah_pinjam' => 'required|integer|min:1',
+            'jumlah_pinjam' => ['required', 'integer', 'min:1',
+                function ($attribute, $value, $fail) use ($inventaris) {
+                    $inventaris->refresh(); // Ambil data stok terbaru
+                    if ($inventaris->jumlah < $value) {
+                        $fail('Jumlah pinjam (' . $value . ') melebihi stok yang tersedia (Stok: ' . $inventaris->jumlah . ').');
+                    }
+                },
+            ],
             'tanggal_kembali_rencana' => 'required|date|after_or_equal:today',
-            'tujuan_peminjaman' => 'required|string|max:1000', // Dibuat wajib
+            'tujuan_peminjaman' => 'required|string|max:1000',
         ]);
-
-        // Cek ketersediaan stok
-        if ($inventaris->jumlah < $validatedData['jumlah_pinjam']) {
-            return redirect()->back()
-                             ->withInput()
-                             ->with('error', 'Stok inventaris tidak mencukupi. Sisa stok: ' . $inventaris->jumlah);
-        }
 
         Peminjaman::create([
             'user_id' => Auth::id(),
             'inventaris_id' => $inventaris->id,
             'jumlah_pinjam' => $validatedData['jumlah_pinjam'],
-            'tanggal_pinjam' => now(), // Otomatis saat ini
+            'tanggal_pinjam' => now(),
             'tanggal_kembali_rencana' => $validatedData['tanggal_kembali_rencana'],
             'tujuan_peminjaman' => $validatedData['tujuan_peminjaman'],
             'status' => 'Menunggu Persetujuan',
+            'catatan_petugas' => null, // Jika Anda menggunakan field ini
         ]);
 
         return redirect()->route('mahasiswa.borrowing.history')
@@ -123,84 +128,80 @@ class BorrowingController extends Controller
     /**
      * Menampilkan detail peminjaman (jika diperlukan).
      */
-    public function show(Peminjaman $peminjaman) // Route Model Binding
+    public function show(Peminjaman $borrowing) // Menggunakan $borrowing
     {
         $user = Auth::user();
-        // Otorisasi: Mahasiswa hanya boleh lihat detail peminjamannya sendiri, Admin/Aslab boleh semua
-        if ($user->role === 'Mahasiswa' && $peminjaman->user_id !== $user->id) {
-            if (!Gate::allows('manage-inventaris')) { // Ganti dengan Gate 'view-any-peminjaman' jika ada
+        if ($user->role === 'Mahasiswa' && $borrowing->user_id !== $user->id) {
+            if (!Gate::allows('manage-inventaris')) {
                 abort(403, 'Anda tidak memiliki izin untuk melihat detail peminjaman ini.');
             }
         }
-        // Alternatif: $this->authorize('view', $peminjaman); // Jika menggunakan Policy
 
-        $peminjaman->load(['user', 'inventaris', 'petugas']);
-        return view('borrowing.show-detail', compact('peminjaman')); // Anda perlu membuat view ini
+        $borrowing->load(['user', 'inventaris.kategori', 'petugas']);
+        return view('borrowing.show-detail', compact('borrowing'));
     }
 
     /**
      * Menyetujui permintaan peminjaman (oleh Admin/Aslab).
      */
-    public function approve(Peminjaman $peminjaman) // Route Model Binding
+    public function approve(Peminjaman $borrowing) // Menggunakan $borrowing
     {
-        if (!Gate::allows('manage-inventaris')) { // Ganti dengan Gate 'manage-peminjaman'
+        if (!Gate::allows('manage-inventaris')) {
             return redirect()->route('admin.borrowing.requests')->with('error', 'Akses ditolak.');
         }
 
-        if ($peminjaman->status !== 'Menunggu Persetujuan') {
+        if ($borrowing->status !== 'Menunggu Persetujuan') {
+            Log::warning("Gagal approve peminjaman ID {$borrowing->id}. Status saat ini: '{$borrowing->status}', diharapkan: 'Menunggu Persetujuan'.");
             return redirect()->route('admin.borrowing.requests')->with('error', 'Peminjaman ini tidak bisa disetujui (status bukan Menunggu Persetujuan).');
         }
 
-        $inventaris = $peminjaman->inventaris;
+        $inventaris = $borrowing->inventaris;
 
         DB::beginTransaction();
         try {
-            if ($inventaris->jumlah < $peminjaman->jumlah_pinjam) {
+            $inventaris->refresh(); // Ambil data stok terbaru
+            if ($inventaris->jumlah < $borrowing->jumlah_pinjam) {
                 DB::rollBack();
                 return redirect()->route('admin.borrowing.requests')->with('error', 'Gagal menyetujui: Stok inventaris tidak mencukupi. Sisa stok: ' . $inventaris->jumlah);
             }
 
-            $inventaris->decrement('jumlah', $peminjaman->jumlah_pinjam); // Kurangi stok
+            $inventaris->decrement('jumlah', $borrowing->jumlah_pinjam);
 
-            $peminjaman->status = 'Dipinjam';
-            $peminjaman->petugas_id = Auth::id(); // Catat petugas yang memproses
-            // $peminjaman->tanggal_disetujui = now(); // Opsional: tambahkan kolom ini di model & migrasi jika perlu
-            $peminjaman->save();
+            $borrowing->status = 'Dipinjam';
+            $borrowing->petugas_id = Auth::id();
+            $borrowing->save();
 
             DB::commit();
-            // TODO: Kirim notifikasi ke mahasiswa jika perlu
 
+            // Redirect ke halaman permintaan lagi, item yang disetujui akan hilang dari daftar
             return redirect()->route('admin.borrowing.requests')->with('success', 'Permintaan peminjaman berhasil disetujui.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Log::error('Error approving borrowing: ' . $e->getMessage()); // Sebaiknya log error
-            return redirect()->route('admin.borrowing.requests')->with('error', 'Terjadi kesalahan saat menyetujui peminjaman.');
+            Log::error('Error saat menyetujui peminjaman ID ' . $borrowing->id . ': ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString());
+            return redirect()->route('admin.borrowing.requests')->with('error', 'Terjadi kesalahan internal saat menyetujui peminjaman.');
         }
     }
 
     /**
      * Menolak permintaan peminjaman (oleh Admin/Aslab).
      */
-    public function reject(Request $request, Peminjaman $peminjaman) // Route Model Binding
+    public function reject(Request $request, Peminjaman $borrowing) // Menggunakan $borrowing
     {
-        if (!Gate::allows('manage-inventaris')) { // Ganti dengan Gate 'manage-peminjaman'
+        if (!Gate::allows('manage-inventaris')) {
             return redirect()->route('admin.borrowing.requests')->with('error', 'Akses ditolak.');
         }
 
-        if ($peminjaman->status !== 'Menunggu Persetujuan') {
+        if ($borrowing->status !== 'Menunggu Persetujuan') {
             return redirect()->route('admin.borrowing.requests')->with('error', 'Peminjaman ini tidak bisa ditolak (status bukan Menunggu Persetujuan).');
         }
 
-        // Asumsi nama field di form adalah 'catatan_petugas'
-        $validatedData = $request->validate(['catatan_petugas' => 'nullable|string|max:1000']);
+        $validatedData = $request->validate(['catatan_petugas' => 'nullable|string|max:1000']); // Asumsi name input di modal adalah 'catatan_petugas'
 
-        $peminjaman->status = 'Ditolak';
-        $peminjaman->petugas_id = Auth::id();
-        $peminjaman->catatan_petugas = $validatedData['catatan_petugas'] ?? null; // Simpan alasan penolakan
-        $peminjaman->save();
-
-        // TODO: Kirim notifikasi ke mahasiswa jika perlu
+        $borrowing->status = 'Ditolak';
+        $borrowing->petugas_id = Auth::id();
+        $borrowing->catatan_petugas = $validatedData['catatan_petugas'] ?? null; // Sesuaikan jika nama kolom di model adalah 'catatan_pengembalian'
+        $borrowing->save();
 
         return redirect()->route('admin.borrowing.requests')->with('success', 'Permintaan peminjaman berhasil ditolak.');
     }
@@ -208,44 +209,44 @@ class BorrowingController extends Controller
     /**
      * Menandai barang sudah dikembalikan (oleh Admin/Aslab).
      */
-    public function markReturned(Request $request, Peminjaman $peminjaman) // Route Model Binding
+    public function markReturned(Request $request, Peminjaman $borrowing) // Menggunakan $borrowing
     {
-        if (!Gate::allows('manage-inventaris')) { // Ganti dengan Gate 'manage-peminjaman'
+        if (!Gate::allows('manage-inventaris')) {
              return redirect()->route('admin.borrowing.history.all')->with('error', 'Akses ditolak.');
         }
 
-        if (!in_array($peminjaman->status, ['Dipinjam', 'Terlambat'])) {
+        if (!in_array($borrowing->status, ['Dipinjam', 'Terlambat'])) {
             return redirect()->route('admin.borrowing.history.all')->with('error', 'Peminjaman tidak dalam status yang bisa dikembalikan.');
         }
 
-        // Asumsi nama field di form adalah 'catatan_petugas'
-        $validatedData = $request->validate(['catatan_petugas' => 'nullable|string|max:1000']);
+        $validatedData = $request->validate(['catatan_petugas' => 'nullable|string|max:1000']); // Asumsi name input di modal adalah 'catatan_petugas'
 
-        $inventaris = $peminjaman->inventaris;
+        $inventaris = $borrowing->inventaris;
 
         DB::beginTransaction();
         try {
-            $inventaris->increment('jumlah', $peminjaman->jumlah_pinjam); // Tambah stok kembali
+            $inventaris->increment('jumlah', $borrowing->jumlah_pinjam);
 
-            $peminjaman->tanggal_kembali_aktual = now();
-            $peminjaman->petugas_id = Auth::id();
-            $peminjaman->catatan_petugas = $validatedData['catatan_petugas'] ?? $peminjaman->catatan_petugas; // Update atau tambahkan catatan
+            $borrowing->tanggal_kembali_aktual = now();
+            $borrowing->petugas_id = Auth::id();
+            // Sesuaikan nama kolom ini jika di model Anda adalah 'catatan_pengembalian'
+            $borrowing->catatan_petugas = $validatedData['catatan_petugas'] ?? $borrowing->catatan_petugas;
 
-            // Cek apakah terlambat
-            if ($peminjaman->tanggal_kembali_rencana && now()->greaterThan($peminjaman->tanggal_kembali_rencana->endOfDay())) {
-                $peminjaman->status = 'Terlambat';
+
+            if ($borrowing->tanggal_kembali_rencana && now()->greaterThan($borrowing->tanggal_kembali_rencana->endOfDay())) {
+                $borrowing->status = 'Terlambat';
             } else {
-                $peminjaman->status = 'Dikembalikan';
+                $borrowing->status = 'Dikembalikan';
             }
-            $peminjaman->save();
+            $borrowing->save();
 
             DB::commit();
             return redirect()->route('admin.borrowing.history.all')->with('success', 'Barang telah ditandai sebagai dikembalikan.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Log::error('Error marking returned: ' . $e->getMessage()); // Sebaiknya log error
-            return redirect()->route('admin.borrowing.history.all')->with('error', 'Terjadi kesalahan saat menandai pengembalian.');
+            Log::error('Error saat menandai pengembalian untuk ID ' . $borrowing->id . ': ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString());
+            return redirect()->route('admin.borrowing.history.all')->with('error', 'Terjadi kesalahan internal saat menandai pengembalian.');
         }
     }
 }

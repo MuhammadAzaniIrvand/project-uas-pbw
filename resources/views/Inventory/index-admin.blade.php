@@ -6,7 +6,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8"> {{-- max-w-full jika ingin tabel lebih lebar --}}
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg">
                 <div class="p-6 lg:p-8 bg-white dark:bg-gray-800 dark:bg-gradient-to-bl dark:from-gray-700/50 dark:via-transparent border-b border-gray-200 dark:border-gray-700">
                     @if(session('success'))
@@ -29,28 +29,69 @@
                         </a>
                     </div>
 
+                    {{-- Tambahkan Form Filter di sini jika Anda mau (dari controller) --}}
+                    {{-- Contoh:
+                    <form method="GET" action="{{ route('admin.inventaris.index') }}" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <x-label for="search" value="Cari" />
+                                <x-input id="search" class="block mt-1 w-full" type="text" name="search" :value="request('search')" />
+                            </div>
+                            <div>
+                                <x-label for="kategori_id_filter" value="Kategori" />
+                                <select name="kategori_id_filter" id="kategori_id_filter" class="block mt-1 w-full border-gray-300 ...">
+                                    <option value="">Semua Kategori</option>
+                                    @foreach ($kategoris as $kat)
+                                        <option value="{{ $kat->id }}" {{ request('kategori_id_filter') == $kat->id ? 'selected' : '' }}>{{ $kat->nama_kategori }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <x-label for="kondisi_filter" value="Kondisi" />
+                                <select name="kondisi_filter" id="kondisi_filter" class="block mt-1 w-full border-gray-300 ...">
+                                    @foreach ($kondisiOptions as $kond)
+                                        <option value="{{ $kond }}" {{ request('kondisi_filter') == $kond ? 'selected' : '' }}>{{ $kond }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <x-button type="submit">Filter</x-button>
+                            </div>
+                        </div>
+                    </form>
+                    --}}
+
                     @if($items->isEmpty())
-                        <p class="text-gray-500 dark:text-gray-400">Belum ada item inventaris.</p>
+                        <p class="text-gray-500 dark:text-gray-400">Belum ada item inventaris yang cocok atau belum ada data.</p>
                     @else
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead class="bg-gray-50 dark:bg-gray-700">
                                     <tr>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Item</th>
+                                        {{-- Sesuaikan header tabel --}}
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama Alat</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kategori</th>
-                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Lokasi</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kondisi</th>
                                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jumlah</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Lokasi</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">No. Seri</th>
                                         <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                     @foreach($items as $item)
                                     <tr>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{{ $item->name }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->category ?? '-' }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->location ?? '-' }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->quantity }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{{ $item->nama_alat ?? '-' }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{-- Akses nama kategori melalui relasi --}}
+                                            {{ $item->kategori->nama_kategori ?? ($item->kategori_id ? 'ID: '.$item->kategori_id : '-') }}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->kondisi ?? '-' }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->jumlah ?? '-' }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->lokasi ?? '-' }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $item->nomor_seri ?? '-' }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            {{-- Pastikan parameter route model binding di web.php adalah {inventaris} --}}
                                             <a href="{{ route('admin.inventaris.edit', $item) }}" class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 mr-3">Edit</a>
                                             <form action="{{ route('admin.inventaris.destroy', $item) }}" method="POST" class="inline-block" onsubmit="return confirm('Yakin ingin menghapus item ini?');">
                                                 @csrf

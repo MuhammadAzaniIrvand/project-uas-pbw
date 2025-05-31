@@ -14,7 +14,7 @@ class Kernel extends HttpKernel
      * @var array<int, class-string|string>
      */
     protected $middleware = [
-        // Middleware global standar Laravel dan Jetstream
+        // Middleware global standar Laravel
         \App\Http\Middleware\TrustProxies::class,
         \Illuminate\Http\Middleware\HandleCors::class,
         \App\Http\Middleware\PreventRequestsDuringMaintenance::class,
@@ -37,11 +37,10 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            // Anda mungkin melihat \Laravel\Jetstream\Http\Middleware\AuthenticateSession::class di sini
-            // tergantung bagaimana Jetstream dikonfigurasi atau ditambahkan olehnya.
         ],
 
         'api' => [
+            // Untuk Laravel 11+, Sanctum biasanya dikonfigurasi di bootstrap/app.php
             // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
@@ -52,27 +51,40 @@ class Kernel extends HttpKernel
      * The application's middleware aliases.
      *
      * Aliases may be used to conveniently assign middleware to routes and groups.
-     * Di Laravel versi lebih baru, ini mungkin disebut $middlewareAliases atau $aliases.
-     * Untuk Laravel 10/11, $routeMiddleware masih umum.
+     * PENTING: Di Laravel 11+, ini adalah `$middlewareAliases`.
      *
      * @var array<string, class-string|string>
      */
-    protected $routeMiddleware = [
+    protected $middlewareAliases = [ // <--- PERHATIKAN PERUBAHAN NAMA PROPERTI INI
         'auth' => \App\Http\Middleware\Authenticate::class, // Atau \Illuminate\Auth\Middleware\Authenticate::class jika Anda tidak membuat kustom
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
-        'can' => \Illuminate\Auth\Middleware\Authorize::class, // Dari Laravel, untuk Gate dan Policy
-        'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class, // Atau dari Laravel
+        'can' => \Illuminate\Auth\Middleware\Authorize::class,
+        'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
         'precognitive' => \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
         'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
-        'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class, // Dari Laravel, untuk verifikasi email
+        'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
 
-        // === INI BAGIAN YANG PALING PENTING UNTUK KASUS ANDA ===
+        // Alias untuk middleware role Anda
         'role' => \App\Http\Middleware\EnsureUserHasRole::class,
-        // ========================================================
     ];
 
-    // Constructor dan method lain di Kernel biarkan standar jika tidak ada modifikasi khusus
-    // public function __construct(...) { parent::__construct(...); }
+    /**
+     * The priority-sorted list of middleware.
+     *
+     * This forces non-global middleware to always be in the given order.
+     * Di Laravel 11, ini juga bisa dikonfigurasi di bootstrap/app.php jika Anda menggunakan cara baru.
+     *
+     * @var string[]
+     */
+    // protected $middlewarePriority = [
+    //     \Illuminate\Cookie\Middleware\EncryptCookies::class,
+    //     \Illuminate\Session\Middleware\StartSession::class,
+    //     \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+    //     \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class, // Atau Authenticate::class
+    //     \Illuminate\Session\Middleware\AuthenticateSession::class,
+    //     \Illuminate\Routing\Middleware\SubstituteBindings::class,
+    //     \Illuminate\Auth\Middleware\Authorize::class,
+    // ];
 }

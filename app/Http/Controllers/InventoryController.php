@@ -5,17 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Inventaris; // Menggunakan model Inventaris
 use App\Models\Kategori;   // Asumsi ada model Kategori untuk dropdown
 use Illuminate\Http\Request;
-use App\Http\Requests\StoreInventarisRequest;    // Form Request untuk store
-use App\Http\Requests\UpdateInventarisRequest;  // Form Request untuk update
+// Pastikan nama Form Request Anda adalah StoreInventarisRequest dan UpdateInventarisRequest
+// Dan file tersebut ada di app/Http/Requests/
+use App\Http\Requests\StoreInventarisRequest;
+use App\Http\Requests\UpdateInventarisRequest;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Log; // Untuk logging error
+use Illuminate\Support\Facades\Log;
 // use Illuminate\Support\Facades\Storage; // Aktifkan jika ada file upload
 
 class InventoryController extends Controller
 {
     /**
      * Display a listing of the resource for Admin/Aslab.
-     * (Manajemen Inventaris)
      */
     public function index(Request $request)
     {
@@ -34,23 +35,20 @@ class InventoryController extends Controller
                   ->orWhere('lokasi', 'like', '%' . $searchTerm . '%')
                   ->orWhere('deskripsi', 'like', '%' . $searchTerm . '%')
                   ->orWhereHas('kategori', function ($subQ) use ($searchTerm) {
-                      $subQ->where('nama_kategori', 'like', '%' . $searchTerm . '%'); // Asumsi kolom nama di tabel kategoris adalah 'nama_kategori'
+                      $subQ->where('nama_kategori', 'like', '%' . $searchTerm . '%');
                   });
             });
         }
 
-        // Filter berdasarkan kategori_id jika ada
         if ($request->filled('kategori_id_filter')) {
             $query->where('kategori_id', $request->kategori_id_filter);
         }
 
-        // Filter berdasarkan kondisi jika ada
-        if ($request->filled('kondisi_filter') && $request->kondisi_filter !== 'Semua') { // Tambah cek 'Semua'
+        if ($request->filled('kondisi_filter') && $request->kondisi_filter !== 'Semua') {
             $query->where('kondisi', $request->kondisi_filter);
         }
 
-        // Sorting
-        $sortBy = $request->input('sort_by', 'nama_alat'); // Default sort by nama_alat
+        $sortBy = $request->input('sort_by', 'nama_alat');
         $sortDirection = $request->input('direction', 'asc');
         $allowedSorts = ['nama_alat', 'jumlah', 'kondisi', 'lokasi', 'created_at'];
         if (in_array($sortBy, $allowedSorts)) {
@@ -59,11 +57,11 @@ class InventoryController extends Controller
              $query->orderBy('nama_alat', 'asc');
         }
 
-        // Menggunakan nama variabel $items untuk dikirim ke view
+        // Menggunakan nama variabel $items untuk view, tapi data dari model Inventaris
         $items = $query->paginate(10)->appends($request->query());
 
         $kategoris = Kategori::orderBy('nama_kategori')->get();
-        $kondisiOptions = ['Semua', 'Baik', 'Rusak Ringan', 'Rusak Berat', 'Dalam Perbaikan']; // Tambahkan 'Semua' untuk filter
+        $kondisiOptions = ['Semua', 'Baik', 'Rusak Ringan', 'Rusak Berat', 'Dalam Perbaikan'];
 
         return view('inventory.index-admin', compact('items', 'kategoris', 'kondisiOptions'));
     }
@@ -77,34 +75,32 @@ class InventoryController extends Controller
             abort(403, 'Anda tidak memiliki izin untuk melakukan tindakan ini.');
         }
         $kategoris = Kategori::orderBy('nama_kategori')->get();
-        $kondisiOptions = ['Baik', 'Rusak Ringan', 'Rusak Berat', 'Dalam Perbaikan']; // Opsi untuk create
+        $kondisiOptions = ['Baik', 'Rusak Ringan', 'Rusak Berat', 'Dalam Perbaikan'];
         return view('inventory.create', compact('kategoris', 'kondisiOptions'));
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreInventarisRequest $request)
+    public function store(StoreInventarisRequest $request) // Menggunakan StoreInventarisRequest
     {
         if (!Gate::allows('manage-inventaris')) {
             abort(403, 'Akses ditolak.');
         }
 
-        $validatedData = $request->validated();
+        $validatedData = $request->validated(); // Data sudah divalidasi
 
         try {
-            // if ($request->hasFile('gambar_inventaris')) {
-            //    $validatedData['kolom_path_gambar_di_db'] = $request->file('gambar_inventaris')->store('inventory_images', 'public');
-            // }
+            // Logika untuk menyimpan data ke model Inventaris
+            Inventaris::create($validatedData); // Menggunakan model Inventaris
 
-            Inventaris::create($validatedData);
-
+            // REDIRECT KE HALAMAN INDEX DENGAN PESAN SUKSES
             return redirect()->route('admin.inventaris.index')
-                             ->with('success', 'Inventaris berhasil ditambahkan.');
+                             ->with('success', 'Inventaris berhasil ditambahkan!');
         } catch (\Exception $e) {
             Log::error('Error saat menyimpan inventaris baru: ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString());
             return redirect()->back()
-                             ->withInput()
+                             ->withInput() // Kembalikan input sebelumnya ke form
                              ->with('error', 'Terjadi kesalahan internal saat menyimpan data. Silakan coba lagi atau hubungi administrator.');
         }
     }
@@ -112,20 +108,21 @@ class InventoryController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Inventaris $inventaris) // Route Model Binding menggunakan $inventaris
+    public function edit(Inventaris $inventaris) // Menggunakan model Inventaris
     {
         if (!Gate::allows('manage-inventaris')) {
             abort(403, 'Akses ditolak.');
         }
         $kategoris = Kategori::orderBy('nama_kategori')->get();
         $kondisiOptions = ['Baik', 'Rusak Ringan', 'Rusak Berat', 'Dalam Perbaikan'];
+        // Mengirim variabel $inventaris ke view
         return view('inventory.edit', compact('inventaris', 'kategoris', 'kondisiOptions'));
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateInventarisRequest $request, Inventaris $inventaris)
+    public function update(UpdateInventarisRequest $request, Inventaris $inventaris) // Menggunakan UpdateInventarisRequest dan model Inventaris
     {
         if (!Gate::allows('manage-inventaris')) {
             abort(403, 'Akses ditolak.');
@@ -134,13 +131,6 @@ class InventoryController extends Controller
         $validatedData = $request->validated();
 
         try {
-            // if ($request->hasFile('gambar_inventaris')) {
-            //     if ($inventaris->kolom_path_gambar_di_db && Storage::disk('public')->exists($inventaris->kolom_path_gambar_di_db)) {
-            //         Storage::disk('public')->delete($inventaris->kolom_path_gambar_di_db);
-            //     }
-            //    $validatedData['kolom_path_gambar_di_db'] = $request->file('gambar_inventaris')->store('inventory_images', 'public');
-            // }
-
             $inventaris->update($validatedData);
 
             return redirect()->route('admin.inventaris.index')
@@ -156,7 +146,7 @@ class InventoryController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Inventaris $inventaris)
+    public function destroy(Inventaris $inventaris) // Menggunakan model Inventaris
     {
         if (!Gate::allows('manage-inventaris')) {
             abort(403, 'Akses ditolak.');
@@ -168,10 +158,6 @@ class InventoryController extends Controller
                  return redirect()->route('admin.inventaris.index')
                                   ->with('error', 'Inventaris tidak bisa dihapus karena sedang ada dalam proses peminjaman.');
             }
-
-            // if ($inventaris->kolom_path_gambar_di_db && Storage::disk('public')->exists($inventaris->kolom_path_gambar_di_db)) {
-            //    Storage::disk('public')->delete($inventaris->kolom_path_gambar_di_db);
-            // }
 
             $inventaris->delete();
 
@@ -188,7 +174,7 @@ class InventoryController extends Controller
 
     public function studentIndex(Request $request)
     {
-        $query = Inventaris::where('jumlah', '>', 0)->with('kategori');
+        $query = Inventaris::where('jumlah', '>', 0)->with('kategori'); // Menggunakan model Inventaris
 
         if ($request->filled('search')) {
             $searchTerm = $request->search;
@@ -203,19 +189,20 @@ class InventoryController extends Controller
             $query->where('kategori_id', $request->kategori_id_filter);
         }
 
-        // Menggunakan nama variabel $items untuk dikirim ke view agar konsisten
+        // Menggunakan nama variabel $items untuk view
         $items = $query->latest('nama_alat')->paginate(9)->appends($request->query());
         $kategoris = Kategori::orderBy('nama_kategori')->get();
 
         return view('inventory.index-student', compact('items', 'kategoris'));
     }
 
-    public function studentShow(Inventaris $inventaris)
+    public function studentShow(Inventaris $inventaris) // Menggunakan model Inventaris
     {
         if ($inventaris->jumlah <= 0 && Auth::check() && Auth::user()->role === 'Mahasiswa') {
             return redirect()->route('mahasiswa.inventory.index')->with('error', 'Stok item ini sedang habis atau item tidak tersedia.');
         }
         $inventaris->load('kategori');
+        // Mengirim variabel $inventaris ke view
         return view('inventory.show-student', compact('inventaris'));
     }
 }

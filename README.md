@@ -91,10 +91,6 @@ http://localhost:8000
 
 ## Akun Default
 
-### Admin
-- Email: admin@labsys.test
-- Password: admin_password_123
-
 ### Aslab
 - Email: aslab.informatika@labsys.test
 - Password: aslab_password_123
